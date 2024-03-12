@@ -59,6 +59,34 @@ And loaded by filename:
 {'name':'Alice', 'type':'user', 'id':'mySSkm8obM6m6MRzYJoaBH'}
 ```
 
+### Commits
+Objects are stored as JSON files in a git repository.  To commit, use `with`:
+
+```
+with db:
+  db.store({'name':'Alice', 'type':'user'})
+```
+
+To specify a commit message:
+```
+with db.commit(m='a commit message') as commit:
+  commit.store({'name':'Alice', 'type':'user'})
+```
+
+### Object Types
+Stored objects can be anything JSON serializable, plus `dataclass` and `namedtuple`.  Example:
+```
+@dataclass
+class User:
+   id: int
+   name: str
+
+>>> db = shadb.SHADB('/some/directory', classes=[User])
+>>> db.store(User(1, 'Alice'))
+'User/1/User-1.json'
+>>> db.load(fn)
+User(id=1, name='Alice')
+```
 
 
 Install
