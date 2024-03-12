@@ -190,16 +190,20 @@ def test_dataclass():
      id: int
      name: str
   with tempfile.TemporaryDirectory() as td:
-    db = shadb.SHADB(td)
+    db = shadb.SHADB(td, classes=[User])
     fn = db.store(User(1, 'Alice'), commit=True)
     assert fn=='User/1/User-1.json'
+    o = db.load(fn)
+    assert o==User(id=1, name='Alice')
 
 def test_namedtuple():
   User = collections.namedtuple('User', 'id name')
   with tempfile.TemporaryDirectory() as td:
-    db = shadb.SHADB(td)
+    db = shadb.SHADB(td, classes=[User])
     fn = db.store(User(1, 'Alice'), commit=True)
     assert fn=='User/1/User-1.json'
+    o = db.load(fn)
+    assert o==User(id=1, name='Alice')
   
 
 def test_fts():

@@ -13,12 +13,13 @@ import dataclasses
 
 class SHADB:
 
-  def __init__(self, git_path, init=True, id_key='id', type_key='type'):
+  def __init__(self, git_path, init=True, id_key='id', type_key='type', classes=[]):
     self._type_key = type_key
     self._id_key = id_key
     self._git_path = pathlib.Path(git_path).absolute()
     self._sqlite_path = self._git_path / 'idx.db'
     self._git = sh.git.bake(C=self._git_path)
+    self._classes = {cls.__name__:cls for cls in classes}
     try:
       self._git.status()
     except sh.ErrorReturnCode_128 as e:
@@ -112,6 +113,11 @@ class SHADB:
       fn = os.path.join(dn, f'{cls}-{sig}.json')
       if dataclasses.is_dataclass(o):
         o = dataclasses.asdict(o)
+        o[self._id_key] = id
+        o['__class__'] = cls
+      if isinstance(o, tuple) and hasattr(o, '_asdict'):
+        o = o._asdict()
+        o['__class__'] = cls
       self.dump(o, fn, _update_idx=False)
       fns.append(fn)
     if commit:
@@ -134,7 +140,15 @@ class SHADB:
   def load(self, fn, ignore_fnf=False):
     try:
       with open(os.path.join(self._git_path, fn),'r') as f:
-        return json.load(f)
+        o = json.load(f)
+        class_name = o.get('__class__')
+        if class_name:
+          cls = self._classes.get(class_name)
+          if cls:
+            del o['__class__']
+            o = cls(**o)
+          
+        return o
     except FileNotFoundError as e:
       if ignore_fnf: return None
       else: raise e
