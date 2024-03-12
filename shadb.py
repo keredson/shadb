@@ -8,6 +8,7 @@ import json
 import re
 import tempfile
 import collections
+import dataclasses
 
 
 class SHADB:
@@ -94,15 +95,23 @@ class SHADB:
   def store(self, *objects, commit=False):
     fns = []
     for o in objects:
-      id = o.get(self._id_key)
-      if not id:
-        o[self._id_key] = id = shortuuid.uuid()
-      sig = urllib.parse.quote(id)
-      resource_type = o.get(self._type_key, 'obj')
-      dn = os.path.join(resource_type, *sig[:4])
+      if isinstance(o,dict):
+        id = o.get(self._id_key)
+        if not id: o[self._id_key] = id = shortuuid.uuid()
+        cls = o.get(self._type_key, 'obj')
+      else:
+        id = getattr(o, self._id_key)
+        if not id:
+          id = shortuuid.uuid()
+          setattr(o, self._id_key, id)
+        cls = o.__class__.__name__
+      sig = urllib.parse.quote(str(id))
+      dn = os.path.join(cls, *sig[:4])
       if not os.path.isdir(os.path.join(self._git_path, dn)):
         os.makedirs(os.path.join(self._git_path, dn), exist_ok=True)
-      fn = os.path.join(dn, f'{resource_type}-{sig}.json')
+      fn = os.path.join(dn, f'{cls}-{sig}.json')
+      if dataclasses.is_dataclass(o):
+        o = dataclasses.asdict(o)
       self.dump(o, fn, _update_idx=False)
       fns.append(fn)
     if commit:

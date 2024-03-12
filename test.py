@@ -2,6 +2,8 @@ import tempfile
 import shadb
 import json
 import pytest
+from dataclasses import dataclass
+import collections
 
 
 def test_unique_index():
@@ -181,6 +183,24 @@ def test_complex_values():
     fn = db.store({'data':'derek anderson'}, commit=True)
     assert db.idx.by_ngram[('derek',)] == []
     assert db.idx.by_ngram[('derek','anderson')] == [fn]
+
+def test_dataclass():
+  @dataclass
+  class User:
+     id: int
+     name: str
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td)
+    fn = db.store(User(1, 'Alice'), commit=True)
+    assert fn=='User/1/User-1.json'
+
+def test_namedtuple():
+  User = collections.namedtuple('User', 'id name')
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td)
+    fn = db.store(User(1, 'Alice'), commit=True)
+    assert fn=='User/1/User-1.json'
+  
 
 def test_fts():
   with tempfile.TemporaryDirectory() as td:
