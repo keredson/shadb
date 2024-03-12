@@ -92,39 +92,12 @@ class SHADB:
             change['date'] = date
     print('changes', changes)
     return changes
-  
-  def store(self, *objects, commit=False):
-    fns = []
-    for o in objects:
-      if isinstance(o,dict):
-        id = o.get(self._id_key)
-        if not id: o[self._id_key] = id = shortuuid.uuid()
-        cls = o.get(self._type_key, 'obj')
-      else:
-        id = getattr(o, self._id_key)
-        if not id:
-          id = shortuuid.uuid()
-          setattr(o, self._id_key, id)
-        cls = o.__class__.__name__
-      sig = urllib.parse.quote(str(id))
-      dn = os.path.join(cls, *sig[:4])
-      if not os.path.isdir(os.path.join(self._git_path, dn)):
-        os.makedirs(os.path.join(self._git_path, dn), exist_ok=True)
-      fn = os.path.join(dn, f'{cls}-{sig}.json')
-      if dataclasses.is_dataclass(o):
-        o = dataclasses.asdict(o)
-        o[self._id_key] = id
-        o['__class__'] = cls
-      if isinstance(o, tuple) and hasattr(o, '_asdict'):
-        o = o._asdict()
-        o['__class__'] = cls
-      self.dump(o, fn, _update_idx=False)
-      fns.append(fn)
-    if commit:
-      self.commit(*fns)
-    self.idx.update(also_fns=fns)
-    return fns[0] if len(objects)==1 else fns
-  
+
+  def store(self, *objects):
+    with self.commit() as commit:
+      return commit.store(*objects)
+      
+
   def dump(self, o, fn, commit=False, _update_idx=True):
     exists = os.path.isfile(os.path.join(self._git_path, fn))
     with open(os.path.join(self._git_path, fn),'w') as f:
@@ -159,6 +132,9 @@ class SHADB:
       self.commit(*fns)
     else:
       self.idx.update(also_fns=fns)
+  
+  def __contains__(self, fn):
+    return os.path.isfile(os.path.join(self._git_path, fn))
 
   def commit(self, *fns_or_objects, update=True):
     if not fns_or_objects: return
@@ -167,8 +143,66 @@ class SHADB:
     if update:
       self.idx.update()
   
+  def commit(self):
+    return Commit(self)
+  
 
+class Commit:
+  def __init__(self, db):
+    self._db = db
+    self._fns = []
 
+  def __enter__(self):
+    return self
+    
+  def __exit__(self, exc_type, exc_value, exc_traceback):
+    if exc_type: self._abort()
+    else: self._commit()
+  
+  def _abort(self):
+    if self._fns:
+      to_delete = [x[1] for x in self._db.status() if x[0]=='A']
+      self._db._git.reset(*self._fns)
+      for fn in to_delete:
+        os.remove(os.path.join(self._db._git_path, fn))
+      self._db.idx.update(also_fns=self._fns)
+  
+  def _commit(self):
+    if self._fns:
+      self._db._git.commit(*self._fns, m='shadb')
+      #self._db.idx.update()
+
+  def store(self, *objects):
+    fns = []
+    for o in objects:
+      if isinstance(o,dict):
+        id = o.get(self._db._id_key)
+        if not id: o[self._db._id_key] = id = shortuuid.uuid()
+        cls = o.get(self._db._type_key, 'obj')
+      else:
+        id = getattr(o, self._db._id_key)
+        if not id:
+          id = shortuuid.uuid()
+          setattr(o, self._db._id_key, id)
+        cls = o.__class__.__name__
+      sig = urllib.parse.quote(str(id))
+      dn = os.path.join(cls, *sig[:4])
+      if not os.path.isdir(os.path.join(self._db._git_path, dn)):
+        os.makedirs(os.path.join(self._db._git_path, dn), exist_ok=True)
+      fn = os.path.join(dn, f'{cls}-{sig}.json')
+      if dataclasses.is_dataclass(o):
+        o = dataclasses.asdict(o)
+        o[self._db._id_key] = id
+        o['__class__'] = cls
+      if isinstance(o, tuple) and hasattr(o, '_asdict'):
+        o = o._asdict()
+        o['__class__'] = cls
+      self._db.dump(o, fn, _update_idx=False)
+      fns.append(fn)
+    self._fns.extend(fns)
+    self._db.idx.update(also_fns=fns)
+    return fns[0] if len(objects)==1 else fns
+    
 
 class Index:
 
@@ -226,7 +260,7 @@ class Index:
       changes = changes.splitlines()
       changes = [s.split() for s in changes if s]
       for fn in also_fns:
-        changes.append(('M',fn))
+        changes.append(('M' if fn in self._db else 'D',fn))
       for status, fn, *other in changes:
         #print('status, fn', status, fn, other)
         if not fn.endswith('.json'): continue
@@ -275,7 +309,6 @@ class Index:
       split_respect_quotes = [s.upper() if s.lower() in cmd_words else s for s in split_respect_quotes]
       split_respect_quotes = ['"%s"'%s.strip('"') if re.search('[-/]',s) else s for s in split_respect_quotes]
       key = ' '.join(split_respect_quotes)
-      print('key', key)
     with self._connect() as conn:
       cur = conn.cursor()
       limit = ' limit 1' if self._unique else ''
@@ -314,9 +347,9 @@ class Index:
     with self._connect() as conn:
       cur = conn.cursor()
       if like:
-        q = cur.execute(f'select key, fn from "{self._tbl_name}" where key like ? order by key', (like,))
+        q = cur.execute(f'select distinct key, fn from "{self._tbl_name}" where key like ? order by key', (like,))
       else:
-        q = cur.execute(f'select key, fn from "{self._tbl_name}" order by key')
+        q = cur.execute(f'select distinct key, fn from "{self._tbl_name}" order by key')
       last_key = None
       values = []
       for key, fn in q.fetchall():
@@ -336,9 +369,9 @@ class Index:
     with self._connect() as conn:
       cur = conn.cursor()
       if like:
-        q = cur.execute(f'select key, count(1) from "{self._tbl_name}" where key like ? group by key', (like,))
+        q = cur.execute(f'select key, count(distinct fn) from "{self._tbl_name}" where key like ? group by key', (like,))
       else:
-        q = cur.execute(f'select key, count(1) from "{self._tbl_name}" group by key')
+        q = cur.execute(f'select key, count(distinct fn) from "{self._tbl_name}" group by key')
       results = q.fetchall()
       return {r[0]:r[1] for r in results}
   

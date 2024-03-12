@@ -1,4 +1,4 @@
-import tempfile
+import os, tempfile
 import shadb
 import json
 import pytest
@@ -10,7 +10,7 @@ def test_unique_index():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
-    db.store({'resourceType':'X', 'id':'y', 'data':'z'}, commit=True)
+    db.store({'resourceType':'X', 'id':'y', 'data':'z'})
     assert db.doc.by_id.get('y')['data'] == 'z'
 
 def test_unique_index_no_doc():
@@ -42,15 +42,15 @@ def test_non_unique_index():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_type', lambda o: o.get('resourceType'))
-    db.store({'resourceType':'X', 'id':'y', 'data':'z'}, commit=True)
+    db.store({'resourceType':'X', 'id':'y', 'data':'z'})
     assert list(db.docs.by_type.get('X')) == [{'resourceType':'X', 'id':'y', 'data':'z'}]
 
 def test_keys():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.keys()) == ['y', 'z']
     assert list(db.docs.by_id.keys()) == ['y', 'z']
 
@@ -58,8 +58,8 @@ def test_keys_unique():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.keys()) == ['y', 'z']
     assert list(db.doc.by_id.keys()) == ['y', 'z']
 
@@ -67,8 +67,8 @@ def test_keys_like():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'alice'}, commit=True)
-    db.store({'id':'bob'}, commit=True)
+    db.store({'id':'alice'})
+    db.store({'id':'bob'})
     assert list(db.idx.by_id.keys(like='al%')) == ['alice']
     assert list(db.docs.by_id.keys(like='al%')) == ['alice']
 
@@ -76,8 +76,8 @@ def test_items_like():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'alice'}, commit=True)
-    db.store({'id':'bob'}, commit=True)
+    db.store({'id':'alice'})
+    db.store({'id':'bob'})
     assert list(db.idx.by_id.items(like='al%')) == [('alice', ['obj/a/l/i/c/obj-alice.json'])]
     assert list(db.docs.by_id.items(like='al%')) == [('alice', [{'id':'alice'}])]
 
@@ -85,8 +85,8 @@ def test_values_like():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'alice'}, commit=True)
-    db.store({'id':'bob'}, commit=True)
+    db.store({'id':'alice'})
+    db.store({'id':'bob'})
     assert list(db.idx.by_id.values(like='al%')) == [['obj/a/l/i/c/obj-alice.json']]
     assert list(db.docs.by_id.values(like='al%')) == [[{'id':'alice'}]]
 
@@ -94,8 +94,8 @@ def test_items():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.items()) == [('y', ['obj/y/obj-y.json']), ('z', ['obj/z/obj-z.json'])]
     assert list(db.docs.by_id.items()) == [('y', [{'id': 'y'}]), ('z', [{'id': 'z'}])]
 
@@ -103,8 +103,8 @@ def test_items_unique():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.items()) == [('y', 'obj/y/obj-y.json'), ('z', 'obj/z/obj-z.json')]
     assert list(db.doc.by_id.items()) == [('y', {'id': 'y'}), ('z', {'id': 'z'})]
 
@@ -112,8 +112,8 @@ def test_values():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'))
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.values()) == [['obj/y/obj-y.json'], ['obj/z/obj-z.json']]
     assert list(db.docs.by_id.values()) == [[{'id': 'y'}], [{'id': 'z'}]]
 
@@ -121,8 +121,8 @@ def test_values_unique():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
-    db.store({'id':'y'}, commit=True)
-    db.store({'id':'z'}, commit=True)
+    db.store({'id':'y'})
+    db.store({'id':'z'})
     assert list(db.idx.by_id.values()) == ['obj/y/obj-y.json', 'obj/z/obj-z.json']
     assert list(db.doc.by_id.values()) == [{'id': 'y'}, {'id': 'z'}]
 
@@ -130,8 +130,8 @@ def test_count_by_key():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_type', lambda o: o.get('resourceType'))
-    db.store({'resourceType':'X', 'id':'y'}, commit=True)
-    db.store({'resourceType':'X', 'id':'z'}, commit=True)
+    db.store({'resourceType':'X', 'id':'y'})
+    db.store({'resourceType':'X', 'id':'z'})
     assert db.idx.by_type.count_by_key() == {'X':2}
     assert db.docs.by_type.count_by_key() == {'X':2}
 
@@ -139,23 +139,25 @@ def test_uncommitted():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_type', lambda o: o.get('resourceType'))
-    db.store({'resourceType':'X', 'id':'y', 'data':'z'}, commit=False)
-    assert list(db.docs.by_type.get('X')) == [{'resourceType':'X', 'id':'y', 'data':'z'}]
+    with db.commit() as commit:
+      commit.store({'resourceType':'X', 'id':'y', 'data':'z'})
+      assert list(db.docs.by_type.get('X')) == [{'resourceType':'X', 'id':'y', 'data':'z'}]
 
 def test_uncommitted_unique_index():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
-    db.store({'resourceType':'X', 'id':'y', 'data':'z'}, commit=False)
-    assert db.doc.by_id.get('y')['data'] == 'z'
+    with db.commit() as commit:
+      commit.store({'resourceType':'X', 'id':'y', 'data':'z'})
+      assert db.doc.by_id.get('y')['data'] == 'z'
 
 def test_delete():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_type', lambda o: o.get('resourceType'))
-    fn = db.store({'resourceType':'X', 'id':'y', 'data':'z'}, commit=True)
+    fn = db.store({'resourceType':'X', 'id':'y', 'data':'z'})
     assert db.idx.by_type['X'] == [fn]
-    db.delete(fn, commit=True)
+    db.delete(fn)
     assert db.idx.by_type['X'] == []
 
 def FAILING_test_delete_uncommitted():
@@ -164,14 +166,14 @@ def FAILING_test_delete_uncommitted():
     db.add_index('by_type', lambda o: o.get('resourceType'))
     fn = db.store({'resourceType':'X', 'id':'y', 'data':'z'})
     assert db.idx.by_type['X'] == [fn]
-    db.delete(fn, commit=True)
+    db.delete(fn)
     assert db.idx.by_type['X'] == []
 
 def test_multiple_values():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_word', lambda o: o.get('data').split())
-    fn = db.store({'data':'derek anderson'}, commit=True)
+    fn = db.store({'data':'derek anderson'})
     assert db.idx.by_word['derek'] == [fn]
     assert db.idx.by_word['anderson'] == [fn]
     assert db.idx.by_word['henderson'] == []
@@ -180,7 +182,7 @@ def test_complex_values():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_ngram', lambda o: tuple(o.get('data').split()))
-    fn = db.store({'data':'derek anderson'}, commit=True)
+    fn = db.store({'data':'derek anderson'})
     assert db.idx.by_ngram[('derek',)] == []
     assert db.idx.by_ngram[('derek','anderson')] == [fn]
 
@@ -191,7 +193,7 @@ def test_dataclass():
      name: str
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, classes=[User])
-    fn = db.store(User(1, 'Alice'), commit=True)
+    fn = db.store(User(1, 'Alice'))
     assert fn=='User/1/User-1.json'
     o = db.load(fn)
     assert o==User(id=1, name='Alice')
@@ -200,17 +202,40 @@ def test_namedtuple():
   User = collections.namedtuple('User', 'id name')
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, classes=[User])
-    fn = db.store(User(1, 'Alice'), commit=True)
+    fn = db.store(User(1, 'Alice'))
     assert fn=='User/1/User-1.json'
     o = db.load(fn)
     assert o==User(id=1, name='Alice')
+
+def test_commit():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    with db.commit() as commit:
+      commit.store({'id':'y', 'data':'z'})
+    assert db.doc.by_id.get('y')['data'] == 'z'
+
+def test_commit_failed():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    try:
+      with db.commit() as commit:
+        fn = commit.store({'id':'y', 'data':'z'})
+        assert db.doc.by_id.get('y')['data'] == 'z'
+        raise RuntimeError()
+    except RuntimeError:
+      pass
+    assert db.doc.by_id.get('y') == None
+      
+
   
 
 def test_fts():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
     db.add_index('by_text', lambda o: json.dumps(o), fts=True)
-    fn = db.store({'data':'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque et luctus arcu, et ornare mi. 2010-10-01'}, commit=True)
+    fn = db.store({'data':'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque et luctus arcu, et ornare mi. 2010-10-01'})
     assert db.idx.by_text['ipsum'] == [fn]
     assert db.idx.by_text['lorem'] == [fn]
     assert db.idx.by_text['consectetur elit'] == [fn]
