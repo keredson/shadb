@@ -20,6 +20,7 @@ class SHADB:
     self._sqlite_path = self._git_path / 'idx.db'
     self._git = sh.git.bake(C=self._git_path)
     self._classes = {cls.__name__:cls for cls in classes}
+    self._current_commit = None
     try:
       self._git.status()
     except sh.ErrorReturnCode_128 as e:
@@ -94,8 +95,11 @@ class SHADB:
     return changes
 
   def store(self, *objects):
-    with self.commit() as commit:
-      return commit.store(*objects)
+    if self._current_commit:
+      self._current_commit.store(*objects)
+    else:
+      with self.commit() as commit:
+        return commit.store(*objects)
       
 
   def dump(self, o, fn, commit=False, _update_idx=True):
@@ -143,13 +147,22 @@ class SHADB:
     if update:
       self.idx.update()
   
-  def commit(self):
-    return Commit(self)
+  def __enter__(self):
+    self._current_commit = self.commit()
+    return self
+
+  def __exit__(self, exc_type, exc_value, exc_traceback):
+    self._current_commit.__exit__(exc_type, exc_value, exc_traceback)
+    self._current_commit = None
+    
+  def commit(self, m=None):
+    return Commit(self, m=m)
   
 
 class Commit:
-  def __init__(self, db):
+  def __init__(self, db, m=None):
     self._db = db
+    self._m = m
     self._fns = []
 
   def __enter__(self):
@@ -169,7 +182,7 @@ class Commit:
   
   def _commit(self):
     if self._fns:
-      self._db._git.commit(*self._fns, m='shadb')
+      self._db._git.commit(*self._fns, m=self._m)
       #self._db.idx.update()
 
   def store(self, *objects):

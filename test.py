@@ -226,8 +226,54 @@ def test_commit_failed():
         raise RuntimeError()
     except RuntimeError:
       pass
+    assert db.idx.by_id.get('y') == None
     assert db.doc.by_id.get('y') == None
       
+def test_implicit_commit():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    with db as commit:
+      commit.store({'id':'y', 'data':'z'})
+    assert db.doc.by_id.get('y')['data'] == 'z'
+
+def test_implicit_commit_failed():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    try:
+      with db as commit:
+        fn = commit.store({'id':'y', 'data':'z'})
+        assert db.doc.by_id.get('y')['data'] == 'z'
+        raise RuntimeError()
+    except RuntimeError:
+      pass
+    assert db.idx.by_id.get('y') == None
+    assert db.doc.by_id.get('y') == None
+
+def test_implicit_commit_saving_from_db_object():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    with db:
+      db.store({'id':'y', 'data':'z'})
+    assert db.doc.by_id.get('y')['data'] == 'z'
+
+def test_implicit_commit_failed_saving_from_db_object():
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td, init=True)
+    db.add_index('by_id', lambda o: o.get('id'), unique=True)
+    try:
+      with db:
+        fn = db.store({'id':'y', 'data':'z'})
+        assert db.doc.by_id.get('y')['data'] == 'z'
+        raise RuntimeError()
+    except RuntimeError:
+      pass
+    assert db.idx.by_id.get('y') == None
+    assert db.doc.by_id.get('y') == None
+
+
 
   
 
