@@ -196,9 +196,24 @@ def test_dataclass():
      id: int
      name: str
   with tempfile.TemporaryDirectory() as td:
-    db = shadb.SHADB(td, classes=[User])
+    db = shadb.SHADB(td)
+    db.register(User)
     db.add_index('by_id', 'id', unique=True)
     fn = db.store(User(1, 'Alice'))
+    assert fn=='User/1/User-by_id-1.json'
+    o = db.load(fn)
+    assert o==User(id=1, name='Alice')
+
+def test_dataclass_auto_index():
+  @dataclass
+  class User:
+     id: int
+     name: str
+  with tempfile.TemporaryDirectory() as td:
+    db = shadb.SHADB(td)
+    db.register(User)
+    db.add_index('by_id', 'id', unique=True, auto=lambda: 1)
+    fn = db.store(User(None, 'Alice'))
     assert fn=='User/1/User-by_id-1.json'
     o = db.load(fn)
     assert o==User(id=1, name='Alice')
@@ -206,7 +221,8 @@ def test_dataclass():
 def test_namedtuple():
   User = collections.namedtuple('User', 'id name')
   with tempfile.TemporaryDirectory() as td:
-    db = shadb.SHADB(td, classes=[User])
+    db = shadb.SHADB(td)
+    db.register(User)
     db.add_index('by_id', 'id', unique=True)
     fn = db.store(User(1, 'Alice'))
     assert fn=='User/1/User-by_id-1.json'

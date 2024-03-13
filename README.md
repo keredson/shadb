@@ -88,7 +88,8 @@ class User:
    id: int
    name: str
 
->>> db = shadb.SHADB('/some/directory', classes=[User])
+>>> db = shadb.SHADB('/some/directory')
+>>> db.register(User)
 >>> db.store(User(1, 'Alice'))
 'User/1/User-1.json'
 >>> db.load(fn)

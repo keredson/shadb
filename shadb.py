@@ -17,11 +17,11 @@ __all__ = ['SHADB']
 
 class SHADB:
 
-  def __init__(self, git_path, classes=[]):
+  def __init__(self, git_path):
     self._git_path = pathlib.Path(git_path).absolute()
     self._sqlite_path = self._git_path / 'idx.db'
     self._git = sh.git.bake(C=self._git_path)
-    self._classes = {cls.__name__:cls for cls in classes}
+    self._classes = {}
     self._current_commit = None
     if not os.path.isdir(git_path):
       os.mkdir(git_path)
@@ -42,6 +42,10 @@ class SHADB:
     with self._connect() as conn:
       cur = conn.cursor()
       cur.execute("CREATE TABLE IF NOT EXISTS indexed_state (name TEXT NOT NULL PRIMARY KEY, last_hash TEXT NOT NULL);")
+  
+  def register(self, *classes):
+    for cls in classes:
+      self._classes[cls.__name__] = cls
   
   def _update_git_path(self, git_path, init=True):
     self.__init__(git_path, init=init)
@@ -193,6 +197,9 @@ class Commit:
     unique_idxs = [idx for idx in self._db.idx.__dict__.values() if isinstance(idx,Index) and idx._unique]
     for o in objects:
 
+      for idx in auto_idxs:
+        idx._autogen(o)
+        
       # handle known object types      
       if dataclasses.is_dataclass(o):
         cls = o.__class__.__name__
@@ -205,9 +212,6 @@ class Commit:
       else:
         cls = o.get('type') or o.get('__class__') or o.get('kind') or 'obj'
       
-      for idx in auto_idxs:
-        idx._autogen(o)
-        
       sig = None
       unique_idx = None
       for unique_idx in unique_idxs:
@@ -280,10 +284,16 @@ class Index:
       conn.commit()
   
   def _autogen(self, o):
-    id = o.get(self._attr)
-    if not id:
-      o[self._attr] = id = self._auto()
-    return id
+    if dataclasses.is_dataclass(o) or (isinstance(o, tuple) and hasattr(o, '_asdict')):
+      v = getattr(o, self._attr)
+      if not v:
+        v = self._auto()
+        setattr(o, self._attr, v)
+    else:
+      v = o.get(self._attr)
+      if not v:
+        o[self._attr] = v = self._auto()
+    return v
       
   def _connect(self):
     return self._db._connect()
@@ -357,7 +367,7 @@ class Index:
       cur = conn.cursor()
       limit = ' limit 1' if self._unique else ''
       if key is None:
-        q = cur.execute(f'select fn from "{self._tbl_name}" where value is null'+limit)
+        q = cur.execute(f'select fn from "{self._tbl_name}" where key is null'+limit)
       else:
         normalized_key = self._normalize(key)
         cmp_o = 'like' if '%' in normalized_key else '='
