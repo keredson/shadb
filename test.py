@@ -11,7 +11,7 @@ def test_unique_index():
     db = shadb.SHADB(td)
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     db.store({'resourceType':'X', 'id':'y', 'data':'z'})
-    assert db.doc.by_id.get('y')['data'] == 'z'
+    assert db.docs.by_id.get('y')['data'] == 'z'
 
 def test_unique_index_no_doc():
   with tempfile.TemporaryDirectory() as td:
@@ -61,7 +61,7 @@ def test_keys_unique():
     db.store({'id':'y'})
     db.store({'id':'z'})
     assert list(db.idx.by_id.keys()) == ['y', 'z']
-    assert list(db.doc.by_id.keys()) == ['y', 'z']
+    assert list(db.docs.by_id.keys()) == ['y', 'z']
 
 def test_keys_like():
   with tempfile.TemporaryDirectory() as td:
@@ -109,7 +109,7 @@ def test_items_unique():
     db.store({'id':'y'})
     db.store({'id':'z'})
     assert list(db.idx.by_id.items()) == [('y', 'obj/y/obj-by_id-y.json'), ('z', 'obj/z/obj-by_id-z.json')]
-    assert list(db.doc.by_id.items()) == [('y', {'id': 'y'}), ('z', {'id': 'z'})]
+    assert list(db.docs.by_id.items()) == [('y', {'id': 'y'}), ('z', {'id': 'z'})]
 
 def test_values():
   with tempfile.TemporaryDirectory() as td:
@@ -128,7 +128,7 @@ def test_values_unique():
     db.store({'id':'y'})
     db.store({'id':'z'})
     assert list(db.idx.by_id.values()) == ['obj/y/obj-by_id-y.json', 'obj/z/obj-by_id-z.json']
-    assert list(db.doc.by_id.values()) == [{'id': 'y'}, {'id': 'z'}]
+    assert list(db.docs.by_id.values()) == [{'id': 'y'}, {'id': 'z'}]
 
 def test_count_by_key():
   with tempfile.TemporaryDirectory() as td:
@@ -153,7 +153,7 @@ def test_uncommitted_unique_index():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     with db.commit() as commit:
       commit.store({'resourceType':'X', 'id':'y', 'data':'z'})
-      assert db.doc.by_id.get('y')['data'] == 'z'
+      assert db.docs.by_id.get('y')['data'] == 'z'
 
 def test_delete():
   with tempfile.TemporaryDirectory() as td:
@@ -235,7 +235,7 @@ def test_commit():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     with db.commit() as commit:
       commit.store({'id':'y', 'data':'z'})
-    assert db.doc.by_id.get('y')['data'] == 'z'
+    assert db.docs.by_id.get('y')['data'] == 'z'
 
 def test_commit_failed():
   with tempfile.TemporaryDirectory() as td:
@@ -244,12 +244,12 @@ def test_commit_failed():
     try:
       with db.commit() as commit:
         fn = commit.store({'id':'y', 'data':'z'})
-        assert db.doc.by_id.get('y')['data'] == 'z'
+        assert db.docs.by_id.get('y')['data'] == 'z'
         raise RuntimeError()
     except RuntimeError:
       pass
     assert db.idx.by_id.get('y') == None
-    assert db.doc.by_id.get('y') == None
+    assert db.docs.by_id.get('y') == None
       
 def test_implicit_commit():
   with tempfile.TemporaryDirectory() as td:
@@ -257,7 +257,7 @@ def test_implicit_commit():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     with db as commit:
       commit.store({'id':'y', 'data':'z'})
-    assert db.doc.by_id.get('y')['data'] == 'z'
+    assert db.docs.by_id.get('y')['data'] == 'z'
 
 def test_implicit_commit_failed():
   with tempfile.TemporaryDirectory() as td:
@@ -266,12 +266,12 @@ def test_implicit_commit_failed():
     try:
       with db as commit:
         fn = commit.store({'id':'y', 'data':'z'})
-        assert db.doc.by_id.get('y')['data'] == 'z'
+        assert db.docs.by_id.get('y')['data'] == 'z'
         raise RuntimeError()
     except RuntimeError:
       pass
     assert db.idx.by_id.get('y') == None
-    assert db.doc.by_id.get('y') == None
+    assert db.docs.by_id.get('y') == None
 
 def test_implicit_commit_saving_from_db_object():
   with tempfile.TemporaryDirectory() as td:
@@ -279,7 +279,7 @@ def test_implicit_commit_saving_from_db_object():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     with db:
       db.store({'id':'y', 'data':'z'})
-    assert db.doc.by_id.get('y')['data'] == 'z'
+    assert db.docs.by_id.get('y')['data'] == 'z'
 
 def test_implicit_commit_failed_saving_from_db_object():
   with tempfile.TemporaryDirectory() as td:
@@ -288,12 +288,12 @@ def test_implicit_commit_failed_saving_from_db_object():
     try:
       with db:
         fn = db.store({'id':'y', 'data':'z'})
-        assert db.doc.by_id.get('y')['data'] == 'z'
+        assert db.docs.by_id.get('y')['data'] == 'z'
         raise RuntimeError()
     except RuntimeError:
       pass
     assert db.idx.by_id.get('y') == None
-    assert db.doc.by_id.get('y') == None
+    assert db.docs.by_id.get('y') == None
 
 def test_mkdir():
   with tempfile.TemporaryDirectory() as td:

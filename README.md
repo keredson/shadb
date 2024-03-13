@@ -23,9 +23,9 @@ Store a document.  If a document doesn't have an `id`, one will be generated.
 {'name':'Alice', 'type':'user', 'id':'mySSkm8obM6m6MRzYJoaBH'}
 ```
 
-Retrieve a document.  Notice unique indices go under `db.doc`, while non-unique indicies go under `db.docs`.
+Retrieve a document:
 ```python
->>> db.doc.by_id['mySSkm8obM6m6MRzYJoaBH']
+>>> db.docs.by_id['mySSkm8obM6m6MRzYJoaBH']
 {'name':'Alice', 'type':'user', 'id':'mySSkm8obM6m6MRzYJoaBH'}
 >>> db.docs.by_type['user']
 [

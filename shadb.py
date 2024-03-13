@@ -34,7 +34,6 @@ class SHADB:
       self._git.add('.gitignore')
       self._git.commit('.gitignore', m='added .gitignore')
     self.idx = Indices()
-    self.doc = UniqueDocIndices()
     self.docs = DocIndices()
     self._init_db()
   
@@ -57,10 +56,7 @@ class SHADB:
     index = Index(self, name, f, **kwargs)
     index.update()
     setattr(self.idx, name, index)
-    if index._unique:
-      setattr(self.doc, name, DocIndex(index))
-    else:
-      setattr(self.docs, name, DocIndex(index))
+    setattr(self.docs, name, DocIndex(index))
 
   def _connect(self):
     conn = sqlite3.connect(self._sqlite_path)
@@ -442,9 +438,6 @@ class Indices:
 
 
 class DocIndices:
-  pass
-
-class UniqueDocIndices:
   pass
 
 class DocIndex:
