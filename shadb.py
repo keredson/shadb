@@ -12,27 +12,27 @@ import uuid
 import inspect, hashlib
 
 
+__all__ = ['SHADB']
+
+
 class SHADB:
 
-  def __init__(self, git_path, init=True, id_key='id', type_key='type', classes=[]):
-    self._type_key = type_key
-    self._id_key = id_key
+  def __init__(self, git_path, classes=[]):
     self._git_path = pathlib.Path(git_path).absolute()
     self._sqlite_path = self._git_path / 'idx.db'
     self._git = sh.git.bake(C=self._git_path)
     self._classes = {cls.__name__:cls for cls in classes}
     self._current_commit = None
+    if not os.path.isdir(git_path):
+      os.mkdir(git_path)
     try:
       self._git.status()
     except sh.ErrorReturnCode_128 as e:
-      if init:
-        self._git.init()
-        with open(self._git_path/'.gitignore', 'w') as f:
-          f.write('idx.db\n')
-        self._git.add('.gitignore')
-        self._git.commit('.gitignore', m='added .gitignore')
-        
-      else: raise e
+      self._git.init()
+      with open(self._git_path/'.gitignore', 'w') as f:
+        f.write('idx.db\n')
+      self._git.add('.gitignore')
+      self._git.commit('.gitignore', m='added .gitignore')
     self.idx = Indices()
     self.doc = UniqueDocIndices()
     self.docs = DocIndices()
@@ -203,7 +203,7 @@ class Commit:
         o = o._asdict()
         o['__namedtuple__'] = cls
       else:
-        cls = o.get(self._db._type_key, 'obj')
+        cls = o.get('type') or o.get('__class__') or o.get('kind') or 'obj'
       
       for idx in auto_idxs:
         idx._autogen(o)
