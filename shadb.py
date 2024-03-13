@@ -2,13 +2,14 @@ import pathlib
 import sqlite3
 import os
 import sh
-import shortuuid
 import urllib.parse
 import json
 import re
 import tempfile
 import collections
 import dataclasses
+import uuid
+import inspect, hashlib
 
 
 class SHADB:
@@ -96,10 +97,10 @@ class SHADB:
 
   def store(self, *objects):
     if self._current_commit:
-      self._current_commit.store(*objects)
+      return self._current_commit.store(*objects)
     else:
-      with self.commit() as commit:
-        return commit.store(*objects)
+      # don't commit if we're not in a commit
+      return self.commit().store(*objects)
       
 
   def dump(self, o, fn, commit=False, _update_idx=True):
@@ -118,13 +119,14 @@ class SHADB:
     try:
       with open(os.path.join(self._git_path, fn),'r') as f:
         o = json.load(f)
-        class_name = o.get('__class__')
-        if class_name:
-          cls = self._classes.get(class_name)
-          if cls:
-            del o['__class__']
-            o = cls(**o)
-          
+        if '__dataclass__' in o:
+          cls = self._classes.get(o['__dataclass__'])
+          del o['__dataclass__']
+          o = cls(**o)
+        elif '__namedtuple__' in o:
+          cls = self._classes.get(o['__namedtuple__'])
+          del o['__namedtuple__']
+          o = cls(**o)
         return o
     except FileNotFoundError as e:
       if ignore_fnf: return None
@@ -187,29 +189,42 @@ class Commit:
 
   def store(self, *objects):
     fns = []
+    auto_idxs = [idx for idx in self._db.idx.__dict__.values() if isinstance(idx,Index) and idx._auto]
+    unique_idxs = [idx for idx in self._db.idx.__dict__.values() if isinstance(idx,Index) and idx._unique]
     for o in objects:
-      if isinstance(o,dict):
-        id = o.get(self._db._id_key)
-        if not id: o[self._db._id_key] = id = shortuuid.uuid()
-        cls = o.get(self._db._type_key, 'obj')
-      else:
-        id = getattr(o, self._db._id_key)
-        if not id:
-          id = shortuuid.uuid()
-          setattr(o, self._db._id_key, id)
+
+      # handle known object types      
+      if dataclasses.is_dataclass(o):
         cls = o.__class__.__name__
-      sig = urllib.parse.quote(str(id))
-      dn = os.path.join(cls, *sig[:4])
+        o = dataclasses.asdict(o)
+        o['__dataclass__'] = cls
+      elif isinstance(o, tuple) and hasattr(o, '_asdict'):
+        cls = o.__class__.__name__
+        o = o._asdict()
+        o['__namedtuple__'] = cls
+      else:
+        cls = o.get(self._db._type_key, 'obj')
+      
+      for idx in auto_idxs:
+        idx._autogen(o)
+        
+      sig = None
+      unique_idx = None
+      for unique_idx in unique_idxs:
+        sig = unique_idx._f(o)
+        if sig: break
+      sig = sig or str(uuid.uuid4()).replace('-','')
+      sig = urllib.parse.quote(str(sig))
+      first_4 = sig[:4]
+      #if len(first_4) < 4:
+      #  first_4 += hashlib.md5(first_4.encode()).hexdigest()
+      #  first_4 = first_4[:4]
+      cls = urllib.parse.quote(str(cls))
+
+      dn = os.path.join(cls, *first_4)
       if not os.path.isdir(os.path.join(self._db._git_path, dn)):
         os.makedirs(os.path.join(self._db._git_path, dn), exist_ok=True)
-      fn = os.path.join(dn, f'{cls}-{sig}.json')
-      if dataclasses.is_dataclass(o):
-        o = dataclasses.asdict(o)
-        o[self._db._id_key] = id
-        o['__class__'] = cls
-      if isinstance(o, tuple) and hasattr(o, '_asdict'):
-        o = o._asdict()
-        o['__class__'] = cls
+      fn = os.path.join(dn, f'{cls}{"-"+unique_idx._name if unique_idx else ""}-{sig}.json')
       self._db.dump(o, fn, _update_idx=False)
       fns.append(fn)
     self._fns.extend(fns)
@@ -219,18 +234,28 @@ class Commit:
 
 class Index:
 
-  def __init__(self, db, name, f, *, version=1, unique=False, index=True, index_None=False, fts=False):
-    if name.startswith('_'): raise Exception('illegal name - starts with _')
-    if not name.isidentifier(): raise Exception('illegal name - not a python identifier')
-    if unique and fts: raise Exception('you cannot set unique=True and fts=True')
-    self._tbl_name = 'idx_%s__v%i' % (name, version)
+  def __init__(self, db, name, attr_or_f, *, unique=False, index=True, index_null=False, fts=False, auto=None):
+    if name.startswith('_'): raise ValueError('illegal name - starts with _')
+    if not name.isidentifier(): raise ValueError('illegal name - not a python identifier')
+    if unique and fts: raise ValueError('you cannot set unique=True and fts=True')
+    if auto==True: auto = uuid.uuid4
+    if isinstance(attr_or_f, str):
+      self._attr = attr_or_f
+      self._f = lambda o: getattr(o, attr_or_f) if hasattr(o, attr_or_f) else o.get(attr_or_f)
+      version = hashlib.md5(attr_or_f.encode()).hexdigest()
+    else:
+      if auto: raise ValueError('to use auto, attr_or_f must be a str')
+      self._attr = None
+      self._f = attr_or_f
+      version = hashlib.md5(inspect.getsource(self._f).encode()).hexdigest()
+    self._tbl_name = 'idx_%s__V%s' % (name, version)
     self._name = name
     self._db = db
-    self._f = f
     self._unique = unique
-    self._index_None = index_None
+    self._index_null = index_null
     self._index = index
     self._fts = fts
+    self._auto = auto
     self._init_db()
   
   def _init_db(self):
@@ -244,7 +269,7 @@ class Index:
       else:
         cur.execute(f'''
           CREATE TABLE IF NOT EXISTS "{self._tbl_name}"(
-            key TEXT {"" if self._index_None else "NOT NULL"} {"PRIMARY KEY" if self._unique else ""},
+            key TEXT {"" if self._index_null else "NOT NULL"} {"PRIMARY KEY" if self._unique else ""},
             fn TEXT NOT NULL
           );
         ''')
@@ -253,6 +278,12 @@ class Index:
           cur.execute(f'CREATE INDEX IF NOT EXISTS "{self._tbl_name}_idx" on "{self._tbl_name}" (key);')
         cur.execute(f'CREATE INDEX IF NOT EXISTS "{self._tbl_name}_fn_idx" on "{self._tbl_name}" (fn);')
       conn.commit()
+  
+  def _autogen(self, o):
+    id = o.get(self._attr)
+    if not id:
+      o[self._attr] = id = self._auto()
+    return id
       
   def _connect(self):
     return self._db._connect()
@@ -291,7 +322,7 @@ class Index:
             print('FileNotFound:', fn)
             continue
           value = self._f(o)
-          if value is not None or self._index_None:
+          if value is not None or self._index_null:
             values = value if isinstance(value, list) else [value]
             for value in values:
               normalized_value = self._normalize(value)

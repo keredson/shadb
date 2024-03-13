@@ -75,29 +75,32 @@ def test_keys_like():
 def test_items_like():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
-    db.add_index('by_id', lambda o: o.get('id'))
+    db.add_index('by_id', 'id', unique=True)
+    db.add_index('by_val', lambda o: o.get('id'))
     db.store({'id':'alice'})
     db.store({'id':'bob'})
-    assert list(db.idx.by_id.items(like='al%')) == [('alice', ['obj/a/l/i/c/obj-alice.json'])]
-    assert list(db.docs.by_id.items(like='al%')) == [('alice', [{'id':'alice'}])]
+    assert list(db.idx.by_val.items(like='al%')) == [('alice', ['obj/a/l/i/c/obj-by_id-alice.json'])]
+    assert list(db.docs.by_val.items(like='al%')) == [('alice', [{'id':'alice'}])]
 
 def test_values_like():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
-    db.add_index('by_id', lambda o: o.get('id'))
+    db.add_index('by_id', 'id', unique=True)
+    db.add_index('by_val', lambda o: o.get('id'))
     db.store({'id':'alice'})
     db.store({'id':'bob'})
-    assert list(db.idx.by_id.values(like='al%')) == [['obj/a/l/i/c/obj-alice.json']]
-    assert list(db.docs.by_id.values(like='al%')) == [[{'id':'alice'}]]
+    assert list(db.idx.by_val.values(like='al%')) == [['obj/a/l/i/c/obj-by_id-alice.json']]
+    assert list(db.docs.by_val.values(like='al%')) == [[{'id':'alice'}]]
 
 def test_items():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
-    db.add_index('by_id', lambda o: o.get('id'))
+    db.add_index('by_id', 'id', unique=True)
+    db.add_index('by_val', lambda o: o.get('id'))
     db.store({'id':'y'})
     db.store({'id':'z'})
-    assert list(db.idx.by_id.items()) == [('y', ['obj/y/obj-y.json']), ('z', ['obj/z/obj-z.json'])]
-    assert list(db.docs.by_id.items()) == [('y', [{'id': 'y'}]), ('z', [{'id': 'z'}])]
+    assert list(db.idx.by_val.items()) == [('y', ['obj/y/obj-by_id-y.json']), ('z', ['obj/z/obj-by_id-z.json'])]
+    assert list(db.docs.by_val.items()) == [('y', [{'id': 'y'}]), ('z', [{'id': 'z'}])]
 
 def test_items_unique():
   with tempfile.TemporaryDirectory() as td:
@@ -105,17 +108,18 @@ def test_items_unique():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     db.store({'id':'y'})
     db.store({'id':'z'})
-    assert list(db.idx.by_id.items()) == [('y', 'obj/y/obj-y.json'), ('z', 'obj/z/obj-z.json')]
+    assert list(db.idx.by_id.items()) == [('y', 'obj/y/obj-by_id-y.json'), ('z', 'obj/z/obj-by_id-z.json')]
     assert list(db.doc.by_id.items()) == [('y', {'id': 'y'}), ('z', {'id': 'z'})]
 
 def test_values():
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, init=True)
-    db.add_index('by_id', lambda o: o.get('id'))
+    db.add_index('by_id', 'id', unique=True)
+    db.add_index('by_val', lambda o: o.get('id'))
     db.store({'id':'y'})
     db.store({'id':'z'})
-    assert list(db.idx.by_id.values()) == [['obj/y/obj-y.json'], ['obj/z/obj-z.json']]
-    assert list(db.docs.by_id.values()) == [[{'id': 'y'}], [{'id': 'z'}]]
+    assert list(db.idx.by_val.values()) == [['obj/y/obj-by_id-y.json'], ['obj/z/obj-by_id-z.json']]
+    assert list(db.docs.by_val.values()) == [[{'id': 'y'}], [{'id': 'z'}]]
 
 def test_values_unique():
   with tempfile.TemporaryDirectory() as td:
@@ -123,7 +127,7 @@ def test_values_unique():
     db.add_index('by_id', lambda o: o.get('id'), unique=True)
     db.store({'id':'y'})
     db.store({'id':'z'})
-    assert list(db.idx.by_id.values()) == ['obj/y/obj-y.json', 'obj/z/obj-z.json']
+    assert list(db.idx.by_id.values()) == ['obj/y/obj-by_id-y.json', 'obj/z/obj-by_id-z.json']
     assert list(db.doc.by_id.values()) == [{'id': 'y'}, {'id': 'z'}]
 
 def test_count_by_key():
@@ -193,8 +197,9 @@ def test_dataclass():
      name: str
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, classes=[User])
+    db.add_index('by_id', 'id', unique=True)
     fn = db.store(User(1, 'Alice'))
-    assert fn=='User/1/User-1.json'
+    assert fn=='User/1/User-by_id-1.json'
     o = db.load(fn)
     assert o==User(id=1, name='Alice')
 
@@ -202,8 +207,9 @@ def test_namedtuple():
   User = collections.namedtuple('User', 'id name')
   with tempfile.TemporaryDirectory() as td:
     db = shadb.SHADB(td, classes=[User])
+    db.add_index('by_id', 'id', unique=True)
     fn = db.store(User(1, 'Alice'))
-    assert fn=='User/1/User-1.json'
+    assert fn=='User/1/User-by_id-1.json'
     o = db.load(fn)
     assert o==User(id=1, name='Alice')
 
